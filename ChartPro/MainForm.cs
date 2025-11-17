@@ -1,7 +1,10 @@
 using ChartPro.Charting;
 using ChartPro.Charting.Interactions;
+using ChartPro.Charting.ShapeManagement;
+using ChartPro.Charting.Shapes;
 using ScottPlot;
 using ScottPlot.WinForms;
+using System.ComponentModel;
 
 namespace ChartPro;
 
@@ -16,23 +19,31 @@ public partial class MainForm : Form
     private ToolStripStatusLabel? _statusShapeInfo;
     private Dictionary<ChartDrawMode, Button> _modeButtons = new();
 
+    // Parameterless ctor required by the WinForms Designer
+    public MainForm() : this(new DesignTimeChartInteractions())
+    {
+    }
+
+    // App/runtime ctor (DI)
     public MainForm(IChartInteractions chartInteractions)
     {
         _chartInteractions = chartInteractions ?? throw new ArgumentNullException(nameof(chartInteractions));
+
+        // Designer-owned minimal init (in .Designer.cs)
         InitializeComponent();
+
+        // Build the actual runtime UI (also fine at design-time since interactions are no-op)
+        BuildUI();
     }
 
-    private void InitializeComponent()
+    private static bool IsInDesignMode =>
+        LicenseManager.UsageMode == LicenseUsageMode.Designtime ||
+        (Application.ExecutablePath?.EndsWith("devenv.exe", StringComparison.OrdinalIgnoreCase) ?? false);
+
+    // Moved from old InitializeComponent()
+    private void BuildUI()
     {
         SuspendLayout();
-
-        // MainForm setup
-        AutoScaleDimensions = new SizeF(7F, 15F);
-        AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(1200, 700);
-        Name = "MainForm";
-        Text = "ChartPro - Trading Chart with ScottPlot 5";
-        KeyPreview = true; // Enable keyboard shortcuts
 
         // Create FormsPlot control
         _formsPlot = new FormsPlot
@@ -64,8 +75,8 @@ public partial class MainForm : Form
         var btnFibExtension = CreateToolButton("Fib Extension", ChartDrawMode.FibonacciExtension, ref yPos);
 
         yPos += 20;
-        
-        // Add snap controls section
+
+        // Snap UI
         var snapLabel = new System.Windows.Forms.Label
         {
             Text = "Snap/Magnet:",
@@ -75,7 +86,7 @@ public partial class MainForm : Form
             Font = new Font(Font, System.Drawing.FontStyle.Bold)
         };
         yPos += 25;
-        
+
         var chkSnapEnabled = new CheckBox
         {
             Text = "Enable Snap (or hold Shift)",
@@ -83,12 +94,12 @@ public partial class MainForm : Form
             Width = 180,
             Height = 20
         };
-        chkSnapEnabled.CheckedChanged += (s, e) => 
+        chkSnapEnabled.CheckedChanged += (s, e) =>
         {
             _chartInteractions.SnapEnabled = chkSnapEnabled.Checked;
         };
         yPos += 25;
-        
+
         var rbSnapNone = new RadioButton
         {
             Text = "No Snap",
@@ -97,13 +108,13 @@ public partial class MainForm : Form
             Height = 20,
             Checked = true
         };
-        rbSnapNone.CheckedChanged += (s, e) => 
+        rbSnapNone.CheckedChanged += (s, e) =>
         {
             if (rbSnapNone.Checked)
                 _chartInteractions.SnapMode = SnapMode.None;
         };
         yPos += 25;
-        
+
         var rbSnapPrice = new RadioButton
         {
             Text = "Snap to Price Grid",
@@ -111,13 +122,13 @@ public partial class MainForm : Form
             Width = 180,
             Height = 20
         };
-        rbSnapPrice.CheckedChanged += (s, e) => 
+        rbSnapPrice.CheckedChanged += (s, e) =>
         {
             if (rbSnapPrice.Checked)
                 _chartInteractions.SnapMode = SnapMode.Price;
         };
         yPos += 25;
-        
+
         var rbSnapCandle = new RadioButton
         {
             Text = "Snap to Candle OHLC",
@@ -125,7 +136,7 @@ public partial class MainForm : Form
             Width = 180,
             Height = 20
         };
-        rbSnapCandle.CheckedChanged += (s, e) => 
+        rbSnapCandle.CheckedChanged += (s, e) =>
         {
             if (rbSnapCandle.Checked)
                 _chartInteractions.SnapMode = SnapMode.CandleOHLC;
@@ -161,6 +172,7 @@ public partial class MainForm : Form
         };
         btnLoadAnnotations.Click += (s, e) => LoadAnnotations();
 
+        // Toolbar children
         toolbarPanel.Controls.Add(btnNone);
         toolbarPanel.Controls.Add(btnTrendLine);
         toolbarPanel.Controls.Add(btnHorizontal);
@@ -169,15 +181,17 @@ public partial class MainForm : Form
         toolbarPanel.Controls.Add(btnCircle);
         toolbarPanel.Controls.Add(btnFibonacci);
         toolbarPanel.Controls.Add(btnFibExtension);
+        toolbarPanel.Controls.Add(snapLabel);
+        toolbarPanel.Controls.Add(chkSnapEnabled);
+        toolbarPanel.Controls.Add(rbSnapNone);
+        toolbarPanel.Controls.Add(rbSnapPrice);
+        toolbarPanel.Controls.Add(rbSnapCandle);
         toolbarPanel.Controls.Add(btnGenerateSampleData);
         toolbarPanel.Controls.Add(btnSaveAnnotations);
         toolbarPanel.Controls.Add(btnLoadAnnotations);
 
-        // Create status bar
-        _statusStrip = new StatusStrip
-        {
-            Name = "statusStrip"
-        };
+        // Status bar
+        _statusStrip = new StatusStrip { Name = "statusStrip" };
 
         _statusMode = new ToolStripStatusLabel
         {
@@ -209,10 +223,12 @@ public partial class MainForm : Form
         _statusStrip.Items.Add(_statusCoordinates);
         _statusStrip.Items.Add(_statusShapeInfo);
 
+        // Root controls
         Controls.Add(_formsPlot);
         Controls.Add(toolbarPanel);
         Controls.Add(_statusStrip);
 
+        // Form events
         Load += MainForm_Load;
         FormClosing += MainForm_FormClosing;
         KeyDown += MainForm_KeyDown;
@@ -296,7 +312,6 @@ public partial class MainForm : Form
         };
         button.Click += ToolButton_Click;
 
-        // Store button reference for keyboard shortcuts
         _modeButtons[mode] = button;
 
         yPos += 35;
@@ -335,6 +350,9 @@ public partial class MainForm : Form
         if (_formsPlot == null)
             return;
 
+        if (IsInDesignMode)
+            return;
+
         // Attach the chart interactions service
         _chartInteractions.Attach(_formsPlot, 0);
         _chartInteractions.EnableAll();
@@ -354,7 +372,6 @@ public partial class MainForm : Form
 
     private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)
     {
-        // Dispose the chart interactions service to unhook event handlers
         _chartInteractions.Dispose();
     }
 
@@ -363,13 +380,10 @@ public partial class MainForm : Form
         if (_formsPlot == null)
             return;
 
-        // Generate sample OHLC data
         _candles = GenerateRandomOHLC(100);
 
-        // Bind candles to the service
         _chartInteractions.BindCandles(_candles);
 
-        // Add candlestick plot
         _formsPlot.Plot.Clear();
         _formsPlot.Plot.Add.Candlestick(_candles);
         _formsPlot.Plot.Axes.AutoScale();
@@ -414,12 +428,12 @@ public partial class MainForm : Form
             try
             {
                 _chartInteractions.SaveShapesToFile(saveFileDialog.FileName);
-                MessageBox.Show($"Annotations saved successfully to:\n{saveFileDialog.FileName}", 
+                MessageBox.Show($"Annotations saved successfully to:\n{saveFileDialog.FileName}",
                     "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to save annotations:\n{ex.Message}", 
+                MessageBox.Show($"Failed to save annotations:\n{ex.Message}",
                     "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -441,22 +455,22 @@ public partial class MainForm : Form
             try
             {
                 _chartInteractions.LoadShapesFromFile(openFileDialog.FileName);
-                MessageBox.Show($"Annotations loaded successfully from:\n{openFileDialog.FileName}", 
+                MessageBox.Show($"Annotations loaded successfully from:\n{openFileDialog.FileName}",
                     "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (FileNotFoundException ex)
             {
-                MessageBox.Show($"File not found:\n{ex.Message}", 
+                MessageBox.Show($"File not found:\n{ex.Message}",
                     "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             catch (System.Text.Json.JsonException ex)
             {
-                MessageBox.Show($"Invalid JSON format:\n{ex.Message}", 
+                MessageBox.Show($"Invalid JSON format:\n{ex.Message}",
                     "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to load annotations:\n{ex.Message}", 
+                MessageBox.Show($"Failed to load annotations:\n{ex.Message}",
                     "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -496,5 +510,56 @@ public partial class MainForm : Form
             return;
 
         _statusShapeInfo.Text = info;
+    }
+
+    // -------- Design-time no-op implementations --------
+
+    private sealed class DesignTimeChartInteractions : IChartInteractions
+    {
+        public ChartDrawMode CurrentDrawMode { get; private set; }
+        public bool IsAttached => false;
+        public IShapeManager ShapeManager { get; } = new DesignTimeShapeManager();
+        public bool SnapEnabled { get; set; }
+        public SnapMode SnapMode { get; set; }
+        public Coordinates? CurrentMouseCoordinates => null;
+        public string? CurrentShapeInfo => null;
+
+        public event EventHandler<ChartDrawMode>? DrawModeChanged;
+        public event EventHandler<Coordinates>? MouseCoordinatesChanged;
+        public event EventHandler<string>? ShapeInfoChanged;
+
+        public void Attach(FormsPlot formsPlot, int pricePlotIndex = 0) { }
+        public void EnableAll() { }
+        public void DisableAll() { }
+        public void SetDrawMode(ChartDrawMode mode) { CurrentDrawMode = mode; DrawModeChanged?.Invoke(this, mode); }
+        public void BindCandles(List<OHLC> candles) { }
+        public void UpdateLastCandle(OHLC candle) { }
+        public void AddCandle(OHLC candle) { }
+        public bool Undo() => false;
+        public bool Redo() => false;
+        public void DeleteSelectedShapes() { }
+        public void SaveShapesToFile(string filePath) { }
+        public void LoadShapesFromFile(string filePath) { }
+        public void Dispose() { }
+    }
+
+    private sealed class DesignTimeShapeManager : IShapeManager
+    {
+        public IReadOnlyList<DrawnShape> Shapes => Array.Empty<DrawnShape>();
+        public bool CanUndo => false;
+        public bool CanRedo => false;
+        public bool IsAttached => false;
+        public IReadOnlyList<DrawnShape> SelectedShapes => Array.Empty<DrawnShape>();
+
+        public void Attach(FormsPlot formsPlot) { }
+        public void AddShape(DrawnShape shape) { }
+        public void DeleteShape(DrawnShape shape) { }
+        public bool Undo() => false;
+        public bool Redo() => false;
+        public DrawnShape? SelectShapeAt(int pixelX, int pixelY, bool addToSelection = false) => null;
+        public void ToggleSelection(DrawnShape shape) { }
+        public void ClearSelection() { }
+        public void DeleteSelectedShapes() { }
+        public void Dispose() { }
     }
 }
